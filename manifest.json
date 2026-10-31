@@ -1,0 +1,10 @@
+{
+  "id": "xdf-verbatim",
+  "name": "XDF Verbatim",
+  "version": "0.1.0",
+  "minAppVersion": "1.11.0",
+  "description": "XDF 例会流水线：录音转写（讯飞·发言人分离）→ LLM 按模板整理会议记录/教研笔记 → 写回例会；接管周例会建档命令",
+  "author": "Schleiden",
+  "authorUrl": "https://github.com/SchleidenLee",
+  "isDesktopOnly": true
+}

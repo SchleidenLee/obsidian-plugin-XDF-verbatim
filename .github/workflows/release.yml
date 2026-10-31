@@ -1,0 +1,65 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      ARTIFACT_DIR: dist
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        version: 11.8.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate version
+        id: version
+        run: |
+          PKG=$(node -p "require('./package.json').version")
+          MAN=$(node -p "require('./manifest.json').version")
+          TAG="${GITHUB_REF_NAME#v}"
+          echo "version=$PKG" >> "$GITHUB_OUTPUT"
+          if [ "$PKG" != "$MAN" ] || [ "$PKG" != "$TAG" ]; then
+            echo "::error::版本号必须一致：package.json=$PKG manifest.json=$MAN tag=$TAG"
+            exit 1
+          fi
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Verify release assets
+        run: |
+          for f in main.js manifest.json styles.css; do
+            if [ ! -f "$ARTIFACT_DIR/$f" ]; then
+              echo "::error::缺少发布产物 $ARTIFACT_DIR/$f"
+              exit 1
+            fi
+          done
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            ${{ env.ARTIFACT_DIR }}/main.js
+            ${{ env.ARTIFACT_DIR }}/manifest.json
+            ${{ env.ARTIFACT_DIR }}/styles.css
