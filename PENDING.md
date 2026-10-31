@@ -14,7 +14,7 @@
 
 ## 🟡 已定待做
 
-> 建议实现顺序：V1 讯飞 provider → V2 模板引擎 → V3 面板 → V4 LLM → V5 命令迁移。
+> 建议实现顺序：V5 模板机制 → V6 base 命令改造（这条链路不依赖转写，可先跑通）→ V1 讯飞 provider → V2 状态机 → V3 面板 → V4 LLM。
 
 ### V1. 讯飞「录音文件转写」provider
 
@@ -54,21 +54,25 @@
 - [ ] 「merge」：目标文件现有手打内容 + 整理稿 → LLM；prompt 硬规则：**手打条目一条不丢、不编造、去重归类**（查的是手打遗漏，非录音遗漏）
 - [ ] v1 不分段：1~2h 会议约几万字，128k 上下文模型放得下
 
-### V5. 模板机制（外置模板，随时可改）
+### V5. 模板机制（固定路径 · 属 base 资产）
 
-- [ ] 模板 = vault 内 markdown 文件，目录路径做设置项（如 `00.SYSTEM/templates/meeting/`），支持 `{{占位符}}`
-- [ ] 变量集（克制，不搞模板引擎）：`date` / `meetingNumber` / `fiscalYear` / `season` / `section` 等
+- [ ] 模板目录**固定**为 `00.SYSTEM/xdf_base/templates/meeting/`，**不做设置项**；脚本顶部一个常量 `TPL_DIR`（要换目录只改这一行）
+  - 理由：base 既有惯例就是硬常量（`ScriptReleaser.ts` 的 `SYSTEM_DIR = "00.SYSTEM/xdf_base"`）。设置项会引入插件间依赖（base 脚本得读别的插件的 settings）、配置漂移（备份还原时设置不带、模板找不到）、脚本单独拷走即失效
+- [ ] 模板 = vault 内 markdown 文件，支持 `{{占位符}}`；**文件名 = 页面类型**（扫目录自动发现，新增类型零代码；不用绝对路径、不做特殊层级）
+- [ ] 变量集（克制，不搞模板引擎）：`date` / `meetingNumber` / `fiscalYear` / `season` / `section`
 - [ ] 占位符未知或缺失 → Notice 报错**中止写入**（禁写半成品）
-- [ ] 条件差异 = 多模板文件解决（不做模板内逻辑）；页面类型（赛课/展课/述职/分享/总结汇报）= 每类型一个 md 文件，新增类型零代码
+- [ ] **首次释放「缺才补」**：模板**不进** ScriptReleaser 的 SCRIPTS/ASSETS 清单（那份清单无条件覆盖，会冲掉用户改过的模板）；改为目录内缺文件时才写入默认模板
+- [ ] 一份模板两用（默认采纳）：base 命令做变量替换生成空壳；verbatim 的 LLM 整理只取节骨架（去 frontmatter、去占位符）
 - [ ] frontmatter 键名**不可改**（date / meeting_number / fiscal_year / section，被 ClassTracker、SQLite 消费）
 
-### V6. 命令迁移（base → verbatim，路线 A）
+### V6. base 三个命令改造（模板驱动，**不迁移**）
 
-- [ ] base 三个 preset 脚本迁入本插件、改原生 TS 命令：**周例会记录 / 周例会建档 / 例会添加页面**
-  - base 只删这三个 preset；通用/新建笔记/追加到笔记**不动**
-  - vault 侧已释放的 `00.SYSTEM/xdf_base/scripts/presets/行政工作/*.js` 需清理
-  - 档案管理脚本模板外置 = 后续批次，本批不动
-- [ ] admin 根路径：读 base settings `folderStructure.admin`，缺省 `"Admin"`（base 缺席不崩）
+- [ ] 三个 preset 留在 base，只把硬编码正文换成模板渲染：**周例会记录 / 周例会建档 / 例会添加页面**
+  - 共享逻辑抽成 asset：`src/xdf/scripts/assets/MeetingTemplates.ts` → 释放为 `00.SYSTEM/xdf_base/scripts/assets/MeetingTemplates.js`（照 `ArchiveUtils.ts` 惯例，三个命令 load 它）
+  - 替换点：`周例会记录.ts` 的 homeContent / recordContent / researchContent、`周例会建档.ts` 的 summaryHome 等、`例会添加页面.ts` 的 PAGES 字典（每类型一个模板文件）
+  - 通用/新建笔记/追加到笔记**不动**；档案管理脚本模板外置 = 后续批次，本批不动
+  - **不清理任何已释放脚本**（没有迁移，`00.SYSTEM/xdf_base/scripts/presets/行政工作/*.js` 继续照常释放）
+- [ ] admin 根路径仍读 base settings `folderStructure.admin`，缺省 `"Admin"`（同现状）
 
 ### V7. 发布前置
 
@@ -83,7 +87,7 @@
 
 ---
 
-## 附：例会 vault 结构约定（V6 迁移命令照此实现）
+## 附：例会 vault 结构约定（V6 base 命令改造照此实现）
 
 ```
 {admin}/周例会/                     ← admin 取 base settings，默认 "Admin"

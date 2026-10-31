@@ -4,7 +4,9 @@
 
 ## 定位
 
-会议流水线插件：例会录音 → 讯飞「录音文件转写大模型」（发言人分离）→ LLM 按外置模板整理《会议记录》《教研笔记》→ 确认后写回例会文件夹。同时接管原 base 的周例会建档/记录/添加页面三个命令（原生 TS，不再走 QuickAdd preset）。
+会议流水线插件：例会录音 → 讯飞「录音文件转写大模型」（发言人分离）→ LLM 按模板整理《会议记录》《教研笔记》→ 确认后写回例会文件夹。
+
+**职责边界**：周例会建档 / 周例会记录 / 例会添加页面三个命令**仍留在 `xdf-base`**（QuickAdd preset），本批只把它们的硬编码正文换成模板渲染；本插件只负责"会后成稿"这一段（转写 + 整理 + 写回）。
 
 ## 目录结构（规划）
 
@@ -22,11 +24,7 @@ src/
     organize.ts      ← 整理：转写稿+模板 → 正文
     merge.ts         ← 合并：手打稿+整理稿（硬规则：手打条目一条不丢）
   templates/
-    engine.ts        ← {{占位符}} 渲染 + 校验（未知占位符即报错中止）
-  commands/
-    meetingSetup.ts  ← 周例会建档（原 base preset 迁移）
-    meetingRecord.ts ← 周例会记录（原 base preset 迁移）
-    addPage.ts       ← 例会添加页面（原 base preset 迁移）
+    engine.ts        ← 读 base 固定模板目录（00.SYSTEM/xdf_base/templates/meeting/），渲染 {{占位符}} + 校验；LLM 场景只取节骨架
   util/
     vault.ts         ← 路径处理、frontmatter 拆装、音频 SHA-256 指纹
 ```
@@ -50,6 +48,7 @@ draft + 目标文件手打内容 ─(LLM merge，可选)→ merged
 ## 依赖
 
 - 软依赖 `xdf-base`：读 `folderStructure.admin` 定位周例会根；缺席回退 `"Admin"`
+- 模板目录 `00.SYSTEM/xdf_base/templates/meeting/` 是 **base 资产**，本插件**只读不写**、不提供设置项（路径为两端共享的硬常量）
 - frontmatter 键名（date / meeting_number / fiscal_year / section）被 ClassTracker、SQLite 消费，**不可改**
 - 独立 git 仓库，不依赖 base 的构建产物
 
