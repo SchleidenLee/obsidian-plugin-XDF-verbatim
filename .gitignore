@@ -18,3 +18,6 @@ bun.lock
 *.sqlite
 tmp/
 out/
+
+# 外部参考仓库（含各自的 .git，勿入库）
+references/
