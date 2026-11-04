@@ -1,1 +1,80 @@
-/* XDF Verbatim — 面板样式（实现阶段填充） */
+/* XDF Verbatim — 侧边面板 */
+
+.xdf-verbatim-panel { display: flex; flex-direction: column; gap: 16px; }
+
+.xdf-verbatim-card {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 12px;
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+}
+
+.xdf-verbatim-hint {
+	margin: 0;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	line-height: 1.5;
+}
+
+.xdf-verbatim-binding { display: flex; align-items: baseline; gap: 2px; font-size: var(--font-ui-small); }
+.xdf-verbatim-doc-type { font-weight: 600; color: var(--text-normal); }
+.xdf-verbatim-folder {
+	min-width: 0;
+	color: var(--text-muted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.xdf-verbatim-section { display: flex; flex-direction: column; gap: 8px; }
+.xdf-verbatim-section-title {
+	margin: 0;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	font-weight: 600;
+	letter-spacing: 0.02em;
+}
+
+.xdf-verbatim-btn-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.xdf-verbatim-btn { padding: 4px 12px; border-radius: var(--radius-s); cursor: pointer; }
+.xdf-verbatim-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.xdf-verbatim-record-btn {
+	width: 100%;
+	padding: 10px 12px;
+	border: none;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	font-size: var(--font-ui-medium);
+}
+.xdf-verbatim-record-btn:disabled { background: var(--background-modifier-border); color: var(--text-faint); }
+
+.xdf-verbatim-timer {
+	font-size: 32px;
+	font-variant-numeric: tabular-nums;
+	text-align: center;
+	color: var(--text-normal);
+}
+
+.xdf-verbatim-textarea {
+	width: 100%;
+	min-height: 140px;
+	padding: 8px;
+	box-sizing: border-box;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: var(--background-primary);
+	color: var(--text-normal);
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	line-height: 1.5;
+	resize: vertical;
+}
+
+.xdf-verbatim-textarea:disabled { background: var(--background-secondary); color: var(--text-faint); cursor: not-allowed; }
+.xdf-verbatim-status { color: var(--text-muted); font-size: var(--font-ui-smaller); }
+.xdf-verbatim-status.is-error { color: var(--text-error); }
+.xdf-verbatim-confirm-actions { justify-content: flex-end; margin-top: 16px; }
