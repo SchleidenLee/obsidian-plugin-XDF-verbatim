@@ -4,3 +4,17 @@ data.json
 main.js
 *.js.map
 .DS_Store
+
+# 只用 pnpm，忽略其它包管理器的锁文件
+package-lock.json
+yarn.lock
+bun.lock
+
+# 本地垃圾
+*.log
+*.tmp
+*.bak
+*.db
+*.sqlite
+tmp/
+out/
