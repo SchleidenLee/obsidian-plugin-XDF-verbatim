@@ -6,6 +6,7 @@ import { MeetingRecorder } from "./record/Recorder";
 import { createXunfeiProvider } from "./providers/xunfei";
 import { createLlmClient } from "./llm/client";
 import { organize as organizeTranscript } from "./llm/organize";
+import { PROMPT_SPECS, findSpecByBasename } from "./llm/prompts";
 import { createEmptySession, loadPersistedData, mergeSettings } from "./session";
 import {
 	appendMeetingLink,
@@ -16,8 +17,8 @@ import {
 } from "./util/vault";
 import { buildAudioBaseName } from "./util/format";
 import { sha256Hex } from "./util/crypto";
-import { ATTACHMENT_DIR, DOC_TYPES, MEETING_FOLDER_RE } from "./types";
-import type { Binding, DocType, Recorder, Session, VerbatimSettings } from "./types";
+import { ATTACHMENT_DIR, MEETING_FOLDER_RE } from "./types";
+import type { Binding, Recorder, Session, VerbatimSettings } from "./types";
 
 /**
  * XDF Verbatim 主流程：绑定页面 → 录音落盘 → 讯飞转写 → LLM 整理 → 写回笔记。
@@ -101,15 +102,21 @@ export default class VerbatimPlugin extends Plugin implements PanelHost, Setting
 	// ── 绑定 ───────────────────────────────────────────────
 
 	/** 校验当前打开的笔记并建立绑定；失败时 Notice 并返回 null */
-	async bindCurrentFile(docType: DocType): Promise<Binding | null> {
+	async bindCurrentFile(docType: string): Promise<Binding | null> {
+		const spec = PROMPT_SPECS[docType];
+		if (!spec) {
+			new Notice(`未知文档类型：${docType}`);
+			return null;
+		}
+
 		const file = this.app.workspace.getActiveFile();
 		if (!file) {
 			new Notice("没有打开的笔记，请先打开会议记录或教研笔记。");
 			return null;
 		}
 
-		if (file.extension !== "md" || file.basename !== docType) {
-			new Notice(`当前笔记不是${docType}，请打开例会内的${docType}.md。`);
+		if (file.extension !== "md" || !spec.matchBasenames.includes(file.basename)) {
+			new Notice(`当前笔记不是${spec.displayName}，请打开例会内的${spec.matchBasenames.join(" / ")}.md。`);
 			return null;
 		}
 
@@ -125,8 +132,8 @@ export default class VerbatimPlugin extends Plugin implements PanelHost, Setting
 			targetFile: file,
 			meetingFolder,
 			attachmentDir: `${meetingFolder}/${ATTACHMENT_DIR}`,
-			audioBaseName: buildAudioBaseName(new Date(), docType),
-			docType,
+			audioBaseName: buildAudioBaseName(new Date(), spec.displayName),
+			docType: spec.docType,
 		};
 
 		this.binding = binding;
@@ -142,12 +149,12 @@ export default class VerbatimPlugin extends Plugin implements PanelHost, Setting
 			new Notice("没有打开的笔记，请先打开会议记录或教研笔记。");
 			return;
 		}
-		const docType = DOC_TYPES.find((type) => type === file.basename);
-		if (!docType) {
+		const spec = findSpecByBasename(file.basename);
+		if (!spec) {
 			new Notice("当前笔记不是会议记录/教研笔记，无法绑定。");
 			return;
 		}
-		await this.bindCurrentFile(docType);
+		await this.bindCurrentFile(spec.docType);
 	}
 
 	unbind(): void {
@@ -315,6 +322,11 @@ export default class VerbatimPlugin extends Plugin implements PanelHost, Setting
 			new Notice("请先绑定会议记录或教研笔记。");
 			return;
 		}
+		const spec = PROMPT_SPECS[binding.docType];
+		if (!spec) {
+			await this.fail("整理失败", new Error(`绑定了未知文档类型：${binding.docType}`));
+			return;
+		}
 		const target = this.app.vault.getAbstractFileByPath(binding.targetFile.path);
 		if (!(target instanceof TFile)) {
 			await this.fail("整理失败", new Error(`绑定页面不存在：${binding.targetFile.path}`));
@@ -330,8 +342,10 @@ export default class VerbatimPlugin extends Plugin implements PanelHost, Setting
 
 			const content = await this.app.vault.read(target);
 			const { body } = splitFrontmatter(content);
+			// 主 Bug 修复：剥离正文首行的播放器，不要喂给 LLM
+			const bodyCleaned = stripLeadingPlayer(body);
 			const client = createLlmClient(this.settings.llm);
-			session.draft = await organizeTranscript(client, binding.docType, session.transcript, body);
+			session.draft = await organizeTranscript(client, spec, session.transcript, bodyCleaned);
 
 			session.state = "organized";
 			session.error = null;
@@ -374,7 +388,12 @@ export default class VerbatimPlugin extends Plugin implements PanelHost, Setting
 
 			// 保留正文顶部已有的播放器；缺失时按当前音频路径重建
 			const playerLine = resolvePlayerLine(body, session);
-			const newBody = playerLine ? `${playerLine}\n\n${draft}\n` : `${draft}\n`;
+
+			// 防御性兜底：如果 draft 首行已经是播放器，不要再插第二次
+			const draftAlreadyHasPlayer = PLAYER_LINE_RE.test(draft.replace(/^(?:\r?\n)+/, "").split("\n", 1)[0].trim());
+			const newBody = playerLine && !draftAlreadyHasPlayer
+				? `${playerLine}\n\n${draft}\n`
+				: `${draft}\n`;
 			await this.app.vault.modify(target, `${frontmatter}${newBody}`);
 
 			session.state = "done";
@@ -441,10 +460,31 @@ export default class VerbatimPlugin extends Plugin implements PanelHost, Setting
 /** body 第一行若已是 webm 内嵌播放器则原样保留，否则按音频路径重新生成 */
 function resolvePlayerLine(body: string, session: Session): string {
 	const firstLine = body.replace(/^(?:\r?\n)+/, "").split("\n", 1)[0].trim();
-	if (/^!\[\[[^\]]+\.webm(?:\|[^\]]*)?\]\]$/i.test(firstLine)) return firstLine;
+	if (PLAYER_LINE_RE.test(firstLine)) return firstLine;
 
 	const fileName = lastPathSegment(session.audioPath);
 	return fileName ? `![[${fileName}]]` : "";
+}
+
+/** 匹配单行 webm 播放器嵌入：`![[xxx.webm]]` 或 `![[xxx.webm|别名]]` */
+const PLAYER_LINE_RE = /^!\[\[[^\]]+\.webm(?:\|[^\]]*)?\]\]$/i;
+
+/**
+ * 从正文剥离掉首行的播放器嵌入（含其后的空白行）。
+ * 用于 organzie() 把正文喂给 LLM 前先清掉播放器，避免 LLM 把播放器抄进 draft。
+ */
+function stripLeadingPlayer(body: string): string {
+	const cleaned = body.replace(/^(?:\r?\n)+/, "");
+	const firstLineEnd = cleaned.indexOf("\n");
+	if (firstLineEnd === -1) {
+		// 只有一行且是播放器，直接清空
+		return PLAYER_LINE_RE.test(cleaned.trim()) ? "" : body;
+	}
+	const firstLine = cleaned.slice(0, firstLineEnd).trim();
+	if (!PLAYER_LINE_RE.test(firstLine)) return body;
+	// 去掉播放器行 + 紧随其后的空行
+	const rest = cleaned.slice(firstLineEnd + 1);
+	return rest.replace(/^(?:\r?\n)+/, "");
 }
 
 function lastPathSegment(path: string): string {

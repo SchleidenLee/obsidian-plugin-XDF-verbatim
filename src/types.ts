@@ -1,9 +1,11 @@
 import type { TFile } from "obsidian";
 
-/** 文档类型：必须与例会文件夹内的实际文件名一致 */
+/**
+ * 文档类型联合（中文旧名，供已写死中文文案的地方临时过渡）。
+ * 真正的路由真相源在 src/llm/prompts.ts 的 PROMPT_SPECS；
+ * Binding.docType 存的是 PromptSpec.docType（小写 key，如 "meeting" / "research"）。
+ */
 export type DocType = "会议记录" | "教研笔记";
-
-export const DOC_TYPES: DocType[] = ["会议记录", "教研笔记"];
 
 /** 录音与音频文件的落地子目录名（由本插件创建） */
 export const ATTACHMENT_DIR = "attachment";
@@ -21,7 +23,8 @@ export interface Binding {
 	attachmentDir: string;
 	/** 音频基础名：`2026-11-05 会议记录` */
 	audioBaseName: string;
-	docType: DocType;
+	/** PromptSpec.docType（小写 key，如 "meeting" / "research"） */
+	docType: string;
 }
 
 export type SessionState =

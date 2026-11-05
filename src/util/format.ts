@@ -1,5 +1,3 @@
-import type { DocType } from "../types";
-
 /** 文件名中不允许出现的字符（Windows / Obsidian 通用） */
 const ILLEGAL_FILENAME_CHARS = /[/\\:*?"<>|]/g;
 
@@ -49,8 +47,9 @@ export function sanitizeFileName(name: string): string {
 /**
  * 音频基础名：`yyyy-MM-dd 类型`，例如 `2026-11-05 会议记录`。
  * 使用本地时区取年月日（与用户看到的日历一致），月/日补零。
+ * 第二个参数是 PromptSpec.displayName（中文），因为它直接用于文件名展示。
  */
-export function buildAudioBaseName(date: Date, docType: DocType): string {
+export function buildAudioBaseName(date: Date, docType: string): string {
 	const year = date.getFullYear();
 	const month = (date.getMonth() + 1).toString().padStart(2, "0");
 	const day = date.getDate().toString().padStart(2, "0");

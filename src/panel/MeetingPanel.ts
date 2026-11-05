@@ -1,7 +1,7 @@
 import { ItemView, Modal } from "obsidian";
 import type { App, WorkspaceLeaf } from "obsidian";
-import { DOC_TYPES } from "../types";
-import type { Binding, DocType, Session, SessionState, VerbatimSettings } from "../types";
+import { PROMPT_SPECS } from "../llm/prompts";
+import type { Binding, Session, SessionState, VerbatimSettings } from "../types";
 import { formatDuration, recordedMs } from "../util/format";
 
 export const VIEW_TYPE = "xdf-verbatim-panel";
@@ -10,7 +10,8 @@ export interface PanelHost {
 	settings: VerbatimSettings;
 	session: Session | null;
 	binding: Binding | null;
-	bindCurrentFile(docType: DocType): Promise<Binding | null>;
+	/** docType 是 PromptSpec.docType 小写 key（"meeting" / "research"） */
+	bindCurrentFile(docType: string): Promise<Binding | null>;
 	unbind(): void;
 	startRecording(): Promise<void>;
 	pauseRecording(): void;
@@ -118,20 +119,23 @@ export class MeetingPanel extends ItemView {
 				cls: "xdf-verbatim-hint",
 			});
 			const row = card.createDiv({ cls: "xdf-verbatim-btn-row" });
-			for (const docType of DOC_TYPES) {
+			for (const spec of Object.values(PROMPT_SPECS)) {
 				const button = row.createEl("button", {
-					text: `绑定为${docType}`,
+					text: `绑定为${spec.displayName}`,
 					cls: "xdf-verbatim-btn",
 				});
 				button.addEventListener("click", () => {
-					void this.bind(docType);
+					void this.bind(spec.docType);
 				});
 			}
 			return;
 		}
 
+		const bindingSpec = PROMPT_SPECS[binding.docType];
+		const displayName = bindingSpec ? bindingSpec.displayName : binding.docType;
+
 		const info = card.createDiv({ cls: "xdf-verbatim-binding" });
-		info.createSpan({ cls: "xdf-verbatim-doc-type", text: binding.docType });
+		info.createSpan({ cls: "xdf-verbatim-doc-type", text: displayName });
 		info.createSpan({ cls: "xdf-verbatim-sep", text: " · " });
 		info.createSpan({ cls: "xdf-verbatim-folder", text: folderName(binding.meetingFolder) });
 		const row = card.createDiv({ cls: "xdf-verbatim-btn-row" });
@@ -277,7 +281,7 @@ export class MeetingPanel extends ItemView {
 		}, SAVE_DEBOUNCE_MS);
 	}
 
-	private async bind(docType: DocType): Promise<void> {
+	private async bind(docType: string): Promise<void> {
 		try {
 			const binding = await this.host.bindCurrentFile(docType);
 			if (binding) this.render();
