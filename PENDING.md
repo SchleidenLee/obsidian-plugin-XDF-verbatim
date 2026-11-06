@@ -8,13 +8,30 @@
 
 ## 🟢 进行中
 
-（无）
+V9 的命名规则已与当前源码一致，仍待真实 Obsidian 实机验收。DOC-SYNC 已记入 DEVLOG。
+
+### V9. 绑定页面时自动找回该页已录音频（重启后可直接转写）
+
+> 本地源码已按命名契约实现（2026-11-06 核对 `src/main.ts`、`src/util/audio-naming.ts`）。QA 独立复跑 `node --test tests/audio-naming.test.ts`：**7/7 通过**；`tsc -noEmit -skipLibCheck` 通过。此前实现工程师报告的临时 stub 集成 8/8 在工作区内没有可复现入口，不作为正式验证结论。**没有真实 Obsidian 实机验收**，通过后再从此处删除。
+
+- [x] **动机**：`session` 只在 `stopRecording` 时创建，绑定关系不持久化。重启后即使 `data.json` 里还有 session，它也只指向「最后一次录音」；同一例会里的另一段录音（如先录的会议记录）没有任何入口可选，表现为「录音录好了、重启后读不到、必须重录才能转写」
+- [x] **方案（本地已实现，2026-11-06 对照 `main.ts`）**：`bindCurrentFile()` 建好 binding 后调用 `restoreSessionFromBinding()`
+  - 扫描 `binding.attachmentDir`，不是任意目录
+  - 文件名基础名是 `yyyy-MM-dd {displayName}.webm`。现行重名是空格加数字；括号 ` (n)` 只兼容历史文件。判断在 `src/util/audio-naming.ts`。同目录不同页面类型不匹配
+  - 多个命中取 mtime 最新
+  - 已有 session 指向同目录同类型路径时不重建。判断使用 `isOwnedAudioPath`，不依赖该路径是否仍在候选列表
+  - 重建 = 读文件 → `sha256Hex` → `createEmptySession(path, hash)` → `saveSession()`；Notice 由绑定流程提示
+  - 未命中返回 null，绑定主流程继续
+- [x] **不改**：录制、转写、整理、写回流程（本次只加找回）
+- [ ] **验收**：录一段 → 关 vault 重开 → 打开该例会页面点绑定 → 面板出现「已录音，待转写」且可直接转写；同一例会另一页面绑定后能找回它自己那段 webm
 
 ---
 
 ## 🟡 已定待做
 
-### V7. PromptSpec 路由表重构（先于 DB 注入，依赖它）
+### V7. PromptSpec 路由表重构（本地已实现，未实机验收）
+
+> 2026-11-05 DEVLOG 记录已落地 `src/llm/prompts.ts`。本条保留到实机验收，不计入已发布。DB 注入仍是 V8，未做。
 
 - [ ] **动机**：当前页面类型散在三处硬编码 —— `types.ts` 的 `DocType` 联合类型（只有两种）、`llm/organize.ts` 的 `defaultSections`（两种固定兜底章节）、`SYSTEM_PROMPT`（两种硬规则 + DB 注入 if 逻辑）。加一种新类型（展课等）要改三四处，而且 DB 注入这种 prompt 专属开关无处安放
 - [ ] **接口**（新文件 `src/llm/prompts.ts`）：
@@ -44,6 +61,17 @@
 - [ ] **兼容**：binding 里的 `docType` 只在面板内存和 session 里用，重启即失效；现有数据.json 无历史包袱
 - [ ] **验收**：能注册两种以上 spec；改 spec.defaultSections 后 LLM 输出章节自动对齐新增的 spec；旧 binding 重启后失效（因为不持久化）
 
+### V10. 一页多音频（同一次例会录多段）
+
+- [ ] **现状**：`Session` 是单条结构（`audioPath/transcript/draft/state`），第二次录音 `createEmptySession()` **直接覆盖**上一条会话；第一段 webm 仍在磁盘，但转写稿丢失且无入口再转
+- [ ] **目标**：同一页面可挂多段录音，逐段转写，整理时按时间序合并
+- [ ] **数据模型**：`session` 改为数组 `Session[]`（每段一条，字段不变，另加 `createdAt`），`data.json` 兼容旧单对象（读到时包成单元素数组）
+- [ ] **录制**：不再覆盖，`push` 一条新 session；正文播放器与首页链接各追加一条（已是该行为，无需改）
+- [ ] **面板**：转写区改为「录音清单」—— 每条显示文件名/时长/状态/转写字数，支持单选后转写、重新转写、删除；只有全部转写完成才允许整理
+- [ ] **整理**：把多份 transcript 按 `createdAt` 拼接（加 `[第1段]` / `[第2段]` 分隔）后一次性喂 LLM
+- [ ] **写回**：`resolvePlayerLine` 需要支持多播放器（正文顶部保留全部 `![[*.webm]]`）
+- [ ] **验收**：一页录 2 段 → 都可分别转写 → 整理稿包含两段内容 → 正文两个播放器都在
+
 ### V8. 注入 xdf-base 只读 DB — 周报数据自动补全
 
 > 依赖 V7：`needsDbInjection` 就是 PromptSpec 的字段，DB 注入只在 spec 标记为 true 时触发
@@ -71,7 +99,9 @@
 - [ ] **加载顺序**：`manifest.json` 加 `"dependencies": { "xdf-base": ">=1.5.1" }`
 - [ ] **base 模板配合**：会议记录.md 里加空章节 `## 待考试学生统计`（让 LLM 有地方填）
 
-### Bug：写回后正文出现两份音频播放器
+### Bug：写回后正文出现两份音频播放器（本地已修，未实机验收）
+
+> 2026-11-05 DEVLOG 记录 `stripLeadingPlayer` 与 `draftAlreadyHasPlayer` 已写入 `main.ts`。保留到实机确认正文只有一份播放器。
 
 - [ ] 现象：`stopRecording` 已在正文首行插了 `![[xxx.webm]]`；`organize()` 把**含播放器行**的正文原封不动发给 LLM，LLM 因硬规则"页面现有内容优先照搬"把播放器抄进了 draft；`writeToNote()` 又从旧正文挖了一次播放器行插在 draft 顶部 → 最终 `frontmatter + ![播放器(挖的)] + ![播放器(LLM带的)] + 正文`，两份
 - [ ] 根因：插件写回逻辑假设「LLM 输出纯正文不含播放器」，但发给 LLM 的 `<页面现有内容>` 里又包含了播放器行 —— 两边哲学不一致，各自维护播放器

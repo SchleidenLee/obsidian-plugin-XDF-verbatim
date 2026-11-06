@@ -15,6 +15,7 @@ import {
 	splitFrontmatter,
 	uniquePath,
 } from "./util/vault";
+import { isOwnedAudioBasename, isOwnedAudioPath } from "./util/audio-naming";
 import { buildAudioBaseName } from "./util/format";
 import { sha256Hex } from "./util/crypto";
 import { ATTACHMENT_DIR, MEETING_FOLDER_RE } from "./types";
@@ -139,6 +140,14 @@ export default class VerbatimPlugin extends Plugin implements PanelHost, Setting
 		this.binding = binding;
 		this.notify();
 		new Notice(`已绑定：${folderName}/${file.name}`);
+
+		// 重启后绑定关系丢失：按命名约定找回本页已录的音频，重建会话
+		const restored = await this.restoreSessionFromBinding(binding, spec.displayName);
+		if (restored) {
+			new Notice(`已找回录音：${restored}，可直接转写。`);
+			this.notify();
+		}
+
 		return binding;
 	}
 
@@ -407,6 +416,41 @@ export default class VerbatimPlugin extends Plugin implements PanelHost, Setting
 	}
 
 	// ── 内部工具 ───────────────────────────────────────────
+
+	/**
+	 * 绑定页面后，按命名约定找回该页已录音频并重建会话；返回找回的文件名或 null。
+	 * 目录不存在 / 无匹配候选 / 已有同目录同类型会话时均返回 null，不影响绑定主流程。
+	 */
+	private async restoreSessionFromBinding(binding: Binding, displayName: string): Promise<string | null> {
+		try {
+			const folder = this.app.vault.getFolderByPath(binding.attachmentDir);
+			if (!folder) return null;
+
+			// 保护已有会话：直接按 session 路径判断目录与类型，不依赖候选列表命中，
+			// 避免磁盘候选变化（如重名文件被删）时冲掉转写稿 / 整理稿。
+			if (this.session && isOwnedAudioPath(this.session.audioPath, binding.attachmentDir, displayName)) {
+				return null;
+			}
+
+			// 候选：基础名 `yyyy-MM-dd 类型.webm`；重名含空格数字（现行）与 ` (n)`（历史兼容）
+			const candidates = folder.children
+				.filter((child): child is TFile => child instanceof TFile)
+				.filter((file) => file.extension === "webm" && isOwnedAudioBasename(file.basename, displayName))
+				.sort((a, b) => b.stat.mtime - a.stat.mtime);
+
+			if (candidates.length === 0) return null;
+
+			const file = candidates[0];
+			const buffer = await this.app.vault.readBinary(file);
+			const hash = await sha256Hex(buffer);
+			this.session = createEmptySession(file.path, hash);
+			await this.saveSession();
+			return file.basename;
+		} catch (error) {
+			console.error("XDF Verbatim: 找回已录音频失败", error);
+			return null;
+		}
+	}
 
 	private async openPanel(): Promise<void> {
 		const { workspace } = this.app;

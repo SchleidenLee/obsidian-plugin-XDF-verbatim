@@ -1,6 +1,6 @@
 # ARCHITECTURE — XDF Verbatim
 
-> 现状架构（v0.1.0 已实现，2026-11-05 验收）。
+> 现状架构，以当前工作区源码为准。已发布 tag 只有 `v0.1.0`。V7、双播放器修复、V9 命名修复都在本地，尚未发 Release，也没有真实 Obsidian 验收。
 
 ## 定位
 
@@ -38,6 +38,7 @@ src/
     crypto.ts        ← sha256Hex、hmacSha1Base64、randomAlphaNumeric
     format.ts        ← formatDuration、recordedMs、sanitizeFileName、buildAudioBaseName
     vault.ts         ← ensureFolder、uniquePath、splitFrontmatter、insertPlayerAtBodyTop、appendMeetingLink
+    audio-naming.ts  ← 录音 basename / 路径归属判断（不依赖 Obsidian）
 ```
 
 ## 数据流
@@ -63,6 +64,7 @@ src/
 - 插件 `data.json`：`{ settings, session }`，每次状态变更即写；`session` 含 `audioPath` / `audioHash` / `orderId` / `signatureRandom` / `state` / `transcript` / `draft` / `error`
 - **跨重启不续轮询**：`orderId` 只在转写成功后落库，重启后重新点「转写」会重新上传音频（结果正确、只是重复消耗一次上传/转写）。真正的断点续传未实现，见 PENDING
 - **绑定关系（targetFile / meetingFolder / docType）不持久化**，重启即失效，仅作面板工作态；重启后转写/整理/写入需重新绑定页面
+- **绑定即找回音频（当前源码，未实机验收）**：`bindCurrentFile()` 调 `restoreSessionFromBinding()`。规则在 `src/util/audio-naming.ts`：基础名 `yyyy-MM-dd {displayName}.webm`；现行重名是空格加数字，与 `uniquePath` 一致；括号 ` (n)` 只兼容历史文件；多个命中取 mtime 最新。已有 session 是否保留，由 `isOwnedAudioPath` 按目录和页面类型判断，不看候选列表。同目录另一 `displayName` 不匹配。跨类型仍会替换这一条会话，那是 V10，尚未实现。
 - **不在 vault 生成中间文件**（转写稿只存插件 `data.json`，用户明确要求）
 
 ## 实现约定与坑（勿回退）
