@@ -1,6 +1,6 @@
 {
   "name": "xdf-verbatim",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "XDF 例会流水线：录音 → 转写 → 整理 → 写回。",
   "main": "main.js",
   "scripts": {
