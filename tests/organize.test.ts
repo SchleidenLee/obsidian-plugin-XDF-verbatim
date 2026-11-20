@@ -20,11 +20,12 @@ test("V13：页面章节为唯一结构权威", () => {
 	assert.ok(system.content.includes("唯一结构权威"));
 });
 
-test("V13：通用风格规范六条齐备", () => {
+test("V14：精简硬约束与正反例齐备", () => {
 	const [system] = buildOrganizeMessages(PROMPT_SPECS.meeting, TRANSCRIPT, PAGE);
-	for (const norm of ["加粗短标签", "无序子点", "完整信息", "不漏议题", "空泛总结", "照转写原话保留"]) {
-		assert.ok(system.content.includes(norm), `缺少风格规范：${norm}`);
+	for (const norm of ["加粗短标签", "50 字", "禁止第三层", "4 条", "议题不漏", "一律不写", "反例", "正例", "照转写原话保留"]) {
+		assert.ok(system.content.includes(norm), `缺少规范：${norm}`);
 	}
+	assert.ok(system.content.includes("不要写\"未提及\"之类占位句"));
 });
 
 test("V13：meeting 专属规则注入（无关过滤＋分节口径）", () => {
@@ -32,6 +33,7 @@ test("V13：meeting 专属规则注入（无关过滤＋分节口径）", () => 
 	assert.ok(system.content.includes("【会议记录专属规则】"));
 	assert.ok(system.content.includes("拿不准是否相关的，保留"));
 	assert.ok(system.content.includes("通知事项"));
+	assert.ok(system.content.includes("不记事件经过"));
 });
 
 test("research 无专属规则时不出现专属规则块", () => {

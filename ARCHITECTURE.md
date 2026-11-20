@@ -79,7 +79,7 @@ src/
 - 播放器与链接写入的契约：`splitFrontmatter` 返回的 `frontmatter` **包含首尾 `---` 及尾换行**，拼回时直接 `${frontmatter}${newBody}`
 - 写回时只保留正文第一行的 `.webm` 内嵌作为播放器，其余正文整体被整理稿替换（覆盖风险由「面板预览 + 确认」兜底）
 - `stopRecording` 顺序：`createBinary` → **立即建 session 并落库** → 再插播放器/首页链接（后两步失败只提示，不把已保存音频标记成 error）
-- 整理 prompt（V13）：页面现有章节为唯一结构权威，无兜底章节；通用风格＝议题编号条目＋加粗标签、两层详略、全面但精简；类型专属规则走 `PromptSpec.systemRules`（meeting 含无关录音过滤与分节口径）
+- 整理 prompt（V13/V14）：页面现有章节为唯一结构权威，无兜底章节；议题编号条目＋加粗标签；精简硬约束＝子点一行 ≤50 字、最多两层、每议题 ≤4 子点，保留白名单/过程黑名单，正反例校准；类型专属规则走 `PromptSpec.systemRules`（meeting 含无关录音过滤、分节口径、不记经过）
 - 整理截断：client 读 `finish_reason`，`length` 时 main.ts Notice 提示疑似截断；不擅自设 `max_tokens`（模型上限未知，设错会直接 400）
 
 ## 依赖
