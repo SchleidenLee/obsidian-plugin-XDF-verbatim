@@ -11,11 +11,17 @@ export interface LlmHttpAdapter {
 	}): Promise<{ status: number; text: string }>;
 }
 
+export interface LlmChatResult {
+	content: string;
+	/** finish_reason 为 length，输出疑似被截断 */
+	truncated: boolean;
+}
+
 export interface LlmClient {
 	chat(
 		messages: ChatMessage[],
 		opts?: { temperature?: number; maxTokens?: number; signal?: AbortSignal },
-	): Promise<string>;
+	): Promise<LlmChatResult>;
 }
 
 const requestUrlAdapter: LlmHttpAdapter = async (req) => {
@@ -33,7 +39,7 @@ function buildEndpoint(baseUrl: string): string {
 	return `${baseUrl.trim().replace(/\/+$/, "")}/chat/completions`;
 }
 
-function extractContent(text: string): string {
+function extractContent(text: string): LlmChatResult {
 	let payload: unknown;
 	try {
 		payload = JSON.parse(text);
@@ -46,11 +52,15 @@ function extractContent(text: string): string {
 		throw new Error(`LLM 响应缺少 choices：${text.slice(0, 500)}`);
 	}
 
-	const content = (choices[0] as { message?: { content?: unknown } })?.message?.content;
+	const choice = choices[0] as {
+		message?: { content?: unknown };
+		finish_reason?: unknown;
+	};
+	const content = choice?.message?.content;
 	if (typeof content !== "string" || content.trim() === "") {
 		throw new Error(`LLM 返回内容为空：${text.slice(0, 500)}`);
 	}
-	return content;
+	return { content, truncated: choice.finish_reason === "length" };
 }
 
 export function createLlmClient(settings: LlmSettings, http?: LlmHttpAdapter): LlmClient {

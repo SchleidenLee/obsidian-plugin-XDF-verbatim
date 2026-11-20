@@ -32,8 +32,9 @@ src/
   panel/
     MeetingPanel.ts  ← ItemView：绑定/录音/转写/整理/预览/写入，ConfirmModal 二次确认
   llm/
-    client.ts        ← NewAPI 兼容口（POST {baseUrl}/chat/completions，Bearer）
-    organize.ts      ← buildOrganizeMessages / cleanModelOutput / organize（一次调用）
+    client.ts        ← NewAPI 兼容口（POST {baseUrl}/chat/completions，Bearer；返回 content＋truncated 标记）
+    prompts.ts       ← PromptSpec 路由表（meeting / research）：systemRules 类型专属规则；V13 起无兜底章节
+    organize.ts      ← buildOrganizeMessages / cleanModelOutput / organize（一次调用，返回 draft＋truncated）
   util/
     crypto.ts        ← sha256Hex、hmacSha1Base64、randomAlphaNumeric
     format.ts        ← formatDuration、recordedMs、sanitizeFileName、buildAudioBaseName
@@ -52,7 +53,7 @@ src/
   ↓ 绑定页面顶部插 ![[录音]] + 首页 📂 区追加 - [[录音|🎧 会议录音]]
 转写（讯飞 upload → orderId → 轮询 getResult）→ transcript（面板可编辑，存 data.json）
   ↓
-整理（system: 角色 + 类型规范兜底；user: transcript + 绑定页面全文）→ draft
+整理（system: 通用风格规范＋类型专属规则，页面章节为唯一结构权威；user: transcript + 绑定页面正文）→ draft（带截断标记）
   ↓
 面板预览（可编辑）→ 用户点「确认写入」
   ↓
@@ -78,6 +79,8 @@ src/
 - 播放器与链接写入的契约：`splitFrontmatter` 返回的 `frontmatter` **包含首尾 `---` 及尾换行**，拼回时直接 `${frontmatter}${newBody}`
 - 写回时只保留正文第一行的 `.webm` 内嵌作为播放器，其余正文整体被整理稿替换（覆盖风险由「面板预览 + 确认」兜底）
 - `stopRecording` 顺序：`createBinary` → **立即建 session 并落库** → 再插播放器/首页链接（后两步失败只提示，不把已保存音频标记成 error）
+- 整理 prompt（V13）：页面现有章节为唯一结构权威，无兜底章节；通用风格＝议题编号条目＋加粗标签、两层详略、全面但精简；类型专属规则走 `PromptSpec.systemRules`（meeting 含无关录音过滤与分节口径）
+- 整理截断：client 读 `finish_reason`，`length` 时 main.ts Notice 提示疑似截断；不擅自设 `max_tokens`（模型上限未知，设错会直接 400）
 
 ## 依赖
 

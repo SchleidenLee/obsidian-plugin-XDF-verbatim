@@ -354,13 +354,18 @@ export default class VerbatimPlugin extends Plugin implements PanelHost, Setting
 			// 主 Bug 修复：剥离正文首行的播放器，不要喂给 LLM
 			const bodyCleaned = stripLeadingPlayer(body);
 			const client = createLlmClient(this.settings.llm);
-			session.draft = await organizeTranscript(client, spec, session.transcript, bodyCleaned);
+			const result = await organizeTranscript(client, spec, session.transcript, bodyCleaned);
+			session.draft = result.draft;
 
 			session.state = "organized";
 			session.error = null;
 			await this.saveSession();
 			this.notify();
-			new Notice("整理完成，请确认后写入。");
+			new Notice(
+				result.truncated
+					? "整理完成，但模型输出疑似被截断，请检查成稿是否完整。"
+					: "整理完成，请确认后写入。",
+			);
 		} catch (error) {
 			await this.fail("整理失败", error);
 		}
