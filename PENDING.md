@@ -2,7 +2,7 @@
 
 > 待办清单。分区：**⚪ 待定**（方案未定）/ **🟡 已定待做**（方案已定，等动手）/ **🟢 进行中**。
 > 完成一项后：从本文件**删除**该条 → 在 [DEVLOG.md](./DEVLOG.md) 追加一行 → 现状变了就更新 [ARCHITECTURE.md](./ARCHITECTURE.md)。
-> 最近修订：2026-11-20（V13 整理 prompt 重规划已实现，移入待实测；V7 描述同步删兜底）。
+> 最近修订：2026-11-20（v0.2.0 已发布，V6 删除；V13 已实现，移入待实测；V7 描述同步删兜底）。
 
 ---
 
@@ -110,12 +110,6 @@
 - [ ] **降级**：base 未启用 / 版本不够 / DB 查询失败 → `console.warn` + Notice 提示，主流程照常
 - [ ] **加载顺序**：`manifest.json` 加 `"dependencies": { "xdf-base": ">=1.5.1" }`
 - [ ] **base 模板配合**：会议记录.md 里加空章节 `## 待考试学生统计`（让 LLM 有地方填）
-
-### V6. 发布
-
-- [x] `pnpm install --lockfile-only` 生成并提交 `pnpm-lock.yaml`（release CI 用 `--frozen-lockfile`）
-- [ ] 推 `v*` tag 走 `.github/workflows/release.yml`：package.json / manifest.json / tag 三处版本一致 → 自动构建发布
-- [ ] 发布前确认 `manifest.json` 的 `minAppVersion` 与 `isDesktopOnly`（录音依赖 Electron，应保持 `true`）
 
 ### 待实测（需用户在真实 Obsidian 环境验证）
 
