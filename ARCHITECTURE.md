@@ -1,6 +1,6 @@
 # ARCHITECTURE — XDF Verbatim
 
-> 现状架构，以当前工作区源码为准。已发布 tag 只有 `v0.1.0`。V7、双播放器修复、V9 命名修复都在本地，尚未发 Release，也没有真实 Obsidian 验收。
+> 现状架构，以当前工作区源码为准。2026-11-07 用户确认 V9 绑定找回录音、写回播放器去重已在真实 Obsidian 环境通过；不据此推定其他项目已验收或已发布新版本。
 
 ## 定位
 
@@ -62,9 +62,9 @@ src/
 ## 持久化
 
 - 插件 `data.json`：`{ settings, session }`，每次状态变更即写；`session` 含 `audioPath` / `audioHash` / `orderId` / `signatureRandom` / `state` / `transcript` / `draft` / `error`
-- **跨重启不续轮询**：`orderId` 只在转写成功后落库，重启后重新点「转写」会重新上传音频（结果正确、只是重复消耗一次上传/转写）。真正的断点续传未实现，见 PENDING
+- **跨重启不续轮询**：`orderId` 只在转写成功后落库，重启后重新点「转写」会重新上传音频（结果正确、只是重复消耗一次上传/转写）。用户已取消跨重启续轮询计划，此处仅保留当前行为说明
 - **绑定关系（targetFile / meetingFolder / docType）不持久化**，重启即失效，仅作面板工作态；重启后转写/整理/写入需重新绑定页面
-- **绑定即找回音频（当前源码，未实机验收）**：`bindCurrentFile()` 调 `restoreSessionFromBinding()`。规则在 `src/util/audio-naming.ts`：基础名 `yyyy-MM-dd {displayName}.webm`；现行重名是空格加数字，与 `uniquePath` 一致；括号 ` (n)` 只兼容历史文件；多个命中取 mtime 最新。已有 session 是否保留，由 `isOwnedAudioPath` 按目录和页面类型判断，不看候选列表。同目录另一 `displayName` 不匹配。跨类型仍会替换这一条会话，那是 V10，尚未实现。
+- **绑定即找回音频（2026-11-07 用户确认实机通过）**：`bindCurrentFile()` 调 `restoreSessionFromBinding()`。规则在 `src/util/audio-naming.ts`：基础名 `yyyy-MM-dd {displayName}.webm`；现行重名是空格加数字，与 `uniquePath` 一致；括号 ` (n)` 只兼容历史文件；多个命中取 mtime 最新。已有 session 是否保留，由 `isOwnedAudioPath` 按目录和页面类型判断，不看候选列表。同目录另一 `displayName` 不匹配。跨类型仍会替换这一条会话，那是 V10，尚未实现。
 - **不在 vault 生成中间文件**（转写稿只存插件 `data.json`，用户明确要求）
 
 ## 实现约定与坑（勿回退）
@@ -86,8 +86,9 @@ src/
 - frontmatter 键名（date / meeting_number / fiscal_year / section）被 ClassTracker、SQLite 消费，写入时**原样保留**，不新增不改名
 - 录音参考 `references/Scuttlebutt/src/recorder.ts`（MIT，不入库）
 - 独立 git 仓库，不依赖 base 的构建产物
-- **已知风险**：base「周例会记录」对已存在文件有跳过逻辑，需确认在建档后重跑时不会冲掉本插件写入的正文（见 PENDING ⚪ 待定）
-- **未验证**：真实 Obsidian（Electron）内的 MediaRecorder 录音与面板渲染/交互，只能在用户环境实测
+- **Base 边界待办**：用户要求同一半年度例会目录下同日已有会议就不再新建；当前 Base 的同路径首页检查不等于同日防重复。由 Base 负责，本插件不增加建档逻辑（见 PENDING）。
+- **实机验证范围**：用户已确认绑定找回录音、写回播放器去重通过；录音及面板其他完整验收项未在本次确认范围内。
+- **取消限制**：本地停止等待不等于撤销讯飞任务。当前使用的官方大模型 API 未公开取消接口，也未说明断连免扣费或取消返额度，不能作此承诺。
 
 ## 构建
 
