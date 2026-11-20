@@ -2,64 +2,85 @@
 
 > 待办清单。分区：**⚪ 待定**（方案未定）/ **🟡 已定待做**（方案已定，等动手）/ **🟢 进行中**。
 > 完成一项后：从本文件**删除**该条 → 在 [DEVLOG.md](./DEVLOG.md) 追加一行 → 现状变了就更新 [ARCHITECTURE.md](./ARCHITECTURE.md)。
-> 最近修订：2026-11-05（V1~V5 已实现并验收，仅剩发布与实测项）。
+> 最近修订：2026-11-20（V13 整理 prompt 重规划定案并动手；V7 描述同步删兜底）。
 
 ---
 
 ## 🟢 进行中
 
-V9 的命名规则已与当前源码一致，仍待真实 Obsidian 实机验收。DOC-SYNC 已记入 DEVLOG。
+### V13. 整理 prompt 重规划：删兜底、通用风格规范、类型专属规则、截断提示
 
-### V9. 绑定页面时自动找回该页已录音频（重启后可直接转写）
+> 2026-11-20 用户确认定案并明确动手。动机：现 prompt 兜底与页面模板二选一打架、详略无标准、无关录音内容无过滤。
 
-> 本地源码已按命名契约实现（2026-11-06 核对 `src/main.ts`、`src/util/audio-naming.ts`）。QA 独立复跑 `node --test tests/audio-naming.test.ts`：**7/7 通过**；`tsc -noEmit -skipLibCheck` 通过。此前实现工程师报告的临时 stub 集成 8/8 在工作区内没有可复现入口，不作为正式验证结论。**没有真实 Obsidian 实机验收**，通过后再从此处删除。
-
-- [x] **动机**：`session` 只在 `stopRecording` 时创建，绑定关系不持久化。重启后即使 `data.json` 里还有 session，它也只指向「最后一次录音」；同一例会里的另一段录音（如先录的会议记录）没有任何入口可选，表现为「录音录好了、重启后读不到、必须重录才能转写」
-- [x] **方案（本地已实现，2026-11-06 对照 `main.ts`）**：`bindCurrentFile()` 建好 binding 后调用 `restoreSessionFromBinding()`
-  - 扫描 `binding.attachmentDir`，不是任意目录
-  - 文件名基础名是 `yyyy-MM-dd {displayName}.webm`。现行重名是空格加数字；括号 ` (n)` 只兼容历史文件。判断在 `src/util/audio-naming.ts`。同目录不同页面类型不匹配
-  - 多个命中取 mtime 最新
-  - 已有 session 指向同目录同类型路径时不重建。判断使用 `isOwnedAudioPath`，不依赖该路径是否仍在候选列表
-  - 重建 = 读文件 → `sha256Hex` → `createEmptySession(path, hash)` → `saveSession()`；Notice 由绑定流程提示
-  - 未命中返回 null，绑定主流程继续
-- [x] **不改**：录制、转写、整理、写回流程（本次只加找回）
-- [ ] **验收**：录一段 → 关 vault 重开 → 打开该例会页面点绑定 → 面板出现「已录音，待转写」且可直接转写；同一例会另一页面绑定后能找回它自己那段 webm
+- [ ] **删兜底**：`PromptSpec.defaultSections` 与 `buildSystemPrompt` 的兜底拼接删除；页面现有章节结构为唯一结构权威（页面完全无章节时按议题自行归纳）。
+- [ ] **通用风格规范**（SYSTEM_PROMPT，参照用户样例图）：一条＝一个议题，编号条目＋「**加粗短标签**：」；简单议题一行、复杂议题挂无序子点可嵌套；子点一行一条完整信息（数字/时限/人名/做法/注意保留，注意单独成点）；全面＝不漏议题要素、精简＝不写讨论过程与空泛总结；时间照原话不换算日期；加粗只用于议题标签。
+- [ ] **meeting 专属规则**（systemRules）：无关录音过滤（判据＝放不进页面任何章节，拿不准保留）＋分节内容口径（本周工作/课量、问题与协调、会议内容/学习内容/通知事项、下周计划）。research 专属规则暂空，通用规范仍生效。
+- [ ] **截断提示**：client 读取 `finish_reason`，`length` 时 organize 返回截断标记，main.ts Notice 提示疑似截断；不擅自设 max_tokens。
+- [ ] **涉及文件**：`src/llm/prompts.ts`、`src/llm/organize.ts`、`src/llm/client.ts`、`src/main.ts`、新增 `tests/organize.test.ts`。
+- [ ] **验收**：`node --test` 全过；WSL `pnpm build` 过；实机整理效果由用户对照样例图验收。
 
 ---
 
 ## 🟡 已定待做
+
+### V11. 关闭再打开面板，恢复原工作状态且录音不中断
+
+- [ ] **目标**：关闭面板只关闭操作窗口，不停止或暂停正在进行的录音；重新打开后接着原工作状态使用。
+- [ ] **方案**：录音状态、累计录音时长及当前计时起点由插件统一保管，面板通过状态快照恢复显示并订阅变化，不再把面板自己的状态作为唯一依据。面板关闭只解除界面订阅和界面计时刷新，不销毁录音器、不取消后台转写或整理任务。
+- [ ] **恢复范围**：同一插件运行期间，重新打开面板时恢复绑定页面、录音中 / 暂停状态、累计录音时长、转写 / 整理进度及当前转写稿 / 整理稿。关闭前尚在防抖保存期内的编辑内容不得丢失。
+- [ ] **边界**：不包含退出 Obsidian、关闭仓库、禁用或重载插件后的持续录音，也不扩展成跨重启续转写。
+- [ ] **涉及文件**：`src/main.ts`、`src/panel/MeetingPanel.ts`、`src/types.ts`；按接口需要调整 `src/record/Recorder.ts`，并补充对应状态与生命周期测试。
+- [ ] **验收**：
+  - 录音中关闭再打开面板，录音不中断，显示仍为录音中、时长连续；停止保存后音频包含关闭面板期间的内容，且只保存一份。
+  - 暂停时关闭再打开，仍显示暂停，暂停期间不累计时长；点击继续后正常续录。
+  - 转写或整理过程中关闭再打开，绑定与任务状态正确，任务继续运行，完成内容可见。
+  - 编辑转写稿或整理稿后立即关闭再打开，内容不丢失；反复开关不产生重复订阅、重复计时或重复任务。
+- [ ] **风险**：后台录音在面板关闭后仍会使用麦克风；重开时不能误显示为空闲。计时源与录音生命周期必须一致，不能因面板销毁误停录音，也不能因重复挂载保存多份音频。
+
+### V12. 中断本地转写，放弃旧任务并允许重新转写
+
+- [ ] **目标**：在上传或等待讯飞转写期间提供「中断转写」按钮；点击后本地放弃旧任务，立即恢复可操作状态，再次点击「转写」建立全新任务。
+- [ ] **方案**：每次转写使用独立任务标识与取消信号；中断时立即使旧标识失效，停止后续查询并解除本地忙碌状态。已经发出的请求可能无法立即断开，但其晚到的结果、进度、异常及收尾逻辑必须全部忽略，不得改动当前会话或新任务。
+- [ ] **数据规则**：保留本地音频与已有用户内容，不删除录音；对没有转写结果的当前录音恢复为可转写状态。旧任务返回的 `orderId`、结果或错误不再写入当前会话；再次转写重新上传，不复用旧订单。
+- [ ] **界面说明**：明确提示「仅停止本地等待，讯飞任务可能继续处理；重新转写可能再次消耗额度」。面板关闭再打开仍能正确显示当前有效任务，不能让已中断任务恢复成忙碌。
+- [ ] **涉及文件**：`src/main.ts`、`src/panel/MeetingPanel.ts`、`src/types.ts`、`src/providers/xunfei.ts`；按状态落盘需要调整 `src/session.ts`，并补充取消与旧任务隔离测试。
+- [ ] **验收**：
+  - 上传中、轮询等待中均可中断；界面立即退出忙碌，录音仍可再次转写，不必等待旧网络请求返回。
+  - 中断后不再为旧任务发起新的结果查询；再次转写确实建立新任务。
+  - 用可控延迟响应模拟旧请求晚到的成功、进度与失败，均不能覆盖新任务结果、错误或状态，也不能提前解除新任务的忙碌状态。
+  - 连续执行「转写 → 中断 → 再转写」不会串任务；中断操作可安全重复，关闭再打开面板后状态一致。
+- [ ] **风险与服务边界**：讯飞服务端旧任务可能成为不再取回结果的遗留任务，并继续消耗额度；本功能不承诺服务端撤单或退费。当前所用官方 API 未公开可调用的取消接口，计费与额度返还规则未明确。参考：https://www.xfyun.cn/doc/spark/asr_llm/Ifasr_llm.html 、https://www.xfyun.cn/services/lfasr 。
 
 ### V7. PromptSpec 路由表重构（本地已实现，未实机验收）
 
 > 2026-11-05 DEVLOG 记录已落地 `src/llm/prompts.ts`。本条保留到实机验收，不计入已发布。DB 注入仍是 V8，未做。
 
 - [ ] **动机**：当前页面类型散在三处硬编码 —— `types.ts` 的 `DocType` 联合类型（只有两种）、`llm/organize.ts` 的 `defaultSections`（两种固定兜底章节）、`SYSTEM_PROMPT`（两种硬规则 + DB 注入 if 逻辑）。加一种新类型（展课等）要改三四处，而且 DB 注入这种 prompt 专属开关无处安放
-- [ ] **接口**（新文件 `src/llm/prompts.ts`）：
+- [ ] **接口**（新文件 `src/llm/prompts.ts`；V13 已删 `defaultSections`，页面模板为唯一结构权威）：
   ```ts
   export interface PromptSpec {
     docType: string;                 // 内部标识，如 "meeting" / "research" / "demo"
     displayName: string;             // 面板绑定弹窗给用户看的
     matchBasenames: string[];        // 哪些文件名自动匹配，如 ["会议记录"]
-    defaultSections: string[];       // 页面空壳时的兜底章节（从 base 模板来）
     systemRules: string[];           // 追加到 system prompt 的专属硬规则
     needsDbInjection: boolean;       // 要不要查 DB 拼 <周报待办数据>（V7 用）
   }
   ```
 - [ ] **路由表**（会议记录 / 教研笔记先注册，对齐 base 已改模板）：
 
-  | docType | matchBasenames | defaultSections | needsDbInjection |
-  |---|---|---|---|
-  | meeting | ["会议记录"] | 本周工作(含课量子项) / 问题与协调 / 会议内容(含学习内容子项) / 下周计划 | **true** |
-  | research | ["教研笔记"] | 问题沟通 / 批课磨课 | false |
+  | docType | matchBasenames | needsDbInjection |
+  |---|---|---|
+  | meeting | ["会议记录"] | **true** |
+  | research | ["教研笔记"] | false |
 
   展课、一对一、班课等后续加一行就行
 - [ ] **各模块改动**：
   - `types.ts`：`DocType` 保留但新增 `docType: string` 字段到 `Binding`（或直接用 `string` 替换联合类型，路由表即单一真相源）
-  - `llm/organize.ts`：`buildOrganizeMessages(docType, transcript, pageContent)` 改为 `buildOrganizeMessages(spec, transcript, pageContent, weeklyContext?)` —— 路由表提供 `defaultSections` 做兜底、`systemRules` 拼进 system prompt
+  - `llm/organize.ts`：`buildOrganizeMessages(docType, transcript, pageContent)` 改为 `buildOrganizeMessages(spec, transcript, pageContent, weeklyContext?)` —— 路由表提供 `systemRules` 拼进 system prompt（V13 起无兜底章节）
   - `main.ts`：绑定弹窗改为**读路由表**动态生成选项（不再写死两种）；`organize()` 里 `const spec = PROMPT_SPECS[docType]`，`spec.needsDbInjection` 才查 DB
   - 面板绑定 UI：列表来源从 `DOC_TYPES` 常量改为 `Object.values(PROMPT_SPECS).map(s => ({value: s.docType, label: s.displayName}))`
 - [ ] **兼容**：binding 里的 `docType` 只在面板内存和 session 里用，重启即失效；现有数据.json 无历史包袱
-- [ ] **验收**：能注册两种以上 spec；改 spec.defaultSections 后 LLM 输出章节自动对齐新增的 spec；旧 binding 重启后失效（因为不持久化）
+- [ ] **验收**：能注册两种以上 spec；改 spec.systemRules 后 LLM 输出专属规则自动对齐；旧 binding 重启后失效（因为不持久化）
 
 ### V10. 一页多音频（同一次例会录多段）
 
@@ -99,17 +120,6 @@ V9 的命名规则已与当前源码一致，仍待真实 Obsidian 实机验收�
 - [ ] **加载顺序**：`manifest.json` 加 `"dependencies": { "xdf-base": ">=1.5.1" }`
 - [ ] **base 模板配合**：会议记录.md 里加空章节 `## 待考试学生统计`（让 LLM 有地方填）
 
-### Bug：写回后正文出现两份音频播放器（本地已修，未实机验收）
-
-> 2026-11-05 DEVLOG 记录 `stripLeadingPlayer` 与 `draftAlreadyHasPlayer` 已写入 `main.ts`。保留到实机确认正文只有一份播放器。
-
-- [ ] 现象：`stopRecording` 已在正文首行插了 `![[xxx.webm]]`；`organize()` 把**含播放器行**的正文原封不动发给 LLM，LLM 因硬规则"页面现有内容优先照搬"把播放器抄进了 draft；`writeToNote()` 又从旧正文挖了一次播放器行插在 draft 顶部 → 最终 `frontmatter + ![播放器(挖的)] + ![播放器(LLM带的)] + 正文`，两份
-- [ ] 根因：插件写回逻辑假设「LLM 输出纯正文不含播放器」，但发给 LLM 的 `<页面现有内容>` 里又包含了播放器行 —— 两边哲学不一致，各自维护播放器
-- [ ] 修复方案：**单一真相源**「插件管播放器，LLM 管正文」
-  - **主修复**：`main.ts` 的 `organize()` 方法里，读 `body` 后、发给 `organizeTranscript()` 前，剥离首行 `![[*.webm]]`（插件技术性占位，不属于页面内容）
-  - **防御性兜底**：`writeToNote()` 里检查 `draft` 首行是否已是播放器，是则不再从旧 body 挖第二次（不怕 LLM 没听话）
-- [ ] 验收：写回后正文顶部**只有一份** `![[xxx.webm]]`
-
 ### V6. 发布
 
 - [x] `pnpm install --lockfile-only` 生成并提交 `pnpm-lock.yaml`（release CI 用 `--frozen-lockfile`）
@@ -126,10 +136,7 @@ V9 的命名规则已与当前源码一致，仍待真实 Obsidian 实机验收�
 
 ## ⚪ 待定
 
-- **base「周例会记录」对已存在文件的覆盖策略**：该脚本对已存在文件有跳过逻辑。若 base 先建空壳 → 本插件写入整理稿 → 用户再跑一次 base 记录命令，是否会冲掉整理结果？需实测后决定（可能让 verbatim 写入后打标记，或 base 侧增加「正文非空不覆盖」判断）。
-- **跨重启续轮询**：当前 `orderId` 只在转写成功后落库，重启后重新点「转写」会重新上传。若要真断点续传，需让 provider 在上传成功时通过回调把 `orderId` / `signatureRandom` 交给上层并支持「只轮询不重传」。当前不做（成本高、收益低）。
-- **面板感知外部启停**：通过命令 / Ribbon 启停录音时，面板靠 `notify()` 重渲染，但本地 `isRecording` 计时器状态可能与真实录音态短暂不一致。当前不做（v1 只在面板内操作）。
-- **`AbortSignal` 不生效**：`requestUrl` 不支持中断，`transcribe` 的 signal 只在轮询 sleep 与请求间检查。当前接受。
+暂无。面板状态恢复与本地中断转写已移至上方 V11 / V12。Base 新建记录保留编号加一及已有记录不覆盖的现状，不增加同日限制，不列为改造待办（2026-11-07 用户确认）。
 
 ---
 
